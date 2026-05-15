@@ -1,0 +1,201 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import type { User } from 'oidc-client-ts';
+import {
+  SSO_ATTEMPTED_KEY,
+  stripAuthParams,
+  urlHasAuthParams,
+  userManager,
+} from './userManager';
+
+export type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
+
+export interface AuthContextValue {
+  /** The raw OIDC user, or null when anonymous. */
+  user: User | null;
+  /** Coarse auth state — handy for switch/ternary rendering. */
+  status: AuthStatus;
+  /** True once a non-expired user is loaded. */
+  isAuthenticated: boolean;
+  /** True until the initial silent-SSO attempt settles. */
+  isLoading: boolean;
+  /** Start an interactive (full-page redirect) sign-in. */
+  login: () => Promise<void>;
+  /** Sign out (redirect), falling back to a local session clear. */
+  logout: () => Promise<void>;
+  /** The current access token, if any. */
+  getAccessToken: () => string | undefined;
+  /** Best-effort display name (name → given+family → email → "User"). */
+  displayName: string;
+  email: string;
+  /** 1–2 letter initials derived from the name or email. */
+  initials: string;
+  /** Profile picture URL, or null. */
+  picture: string | null;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function computeInitials(name: string, email: string): string {
+  const source = name.trim() || email.trim();
+  if (!source) return '?';
+  if (source.includes('@')) return source[0]!.toUpperCase();
+  const parts = source.split(/\s+/).filter(Boolean);
+  return (
+    parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join('') ||
+    source[0]!.toUpperCase()
+  );
+}
+
+/**
+ * Wraps the app, runs the suite-standard hidden-iframe silent SSO on mount,
+ * and exposes auth state via {@link useAuth}. Apps must also ship a
+ * `public/silent-callback.html` (served at `/silent-callback.html`).
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initStarted = useRef(false);
+
+  useEffect(() => {
+    if (initStarted.current) return;
+    initStarted.current = true;
+    let cancelled = false;
+
+    const finish = (loaded: User | null) => {
+      if (cancelled) return;
+      setUser(loaded);
+      setIsLoading(false);
+    };
+
+    (async () => {
+      try {
+        if (urlHasAuthParams()) {
+          try {
+            const completed = await userManager.signinRedirectCallback();
+            sessionStorage.setItem(SSO_ATTEMPTED_KEY, '1');
+            stripAuthParams();
+            finish(completed ?? null);
+            return;
+          } catch (err) {
+            sessionStorage.setItem(SSO_ATTEMPTED_KEY, '1');
+            stripAuthParams();
+            console.warn('[auth] sign-in callback failed', err);
+            finish(null);
+            return;
+          }
+        }
+
+        const existing = await userManager.getUser();
+        if (existing && !existing.expired) {
+          finish(existing);
+          return;
+        }
+        if (existing?.expired) await userManager.removeUser().catch(() => {});
+
+        // Hidden-iframe silent SSO: picks up an existing Zitadel session
+        // without a full-page redirect. When there is no session it rejects
+        // quietly (any login UI stays trapped in the invisible iframe), so the
+        // app simply renders anonymous instead of stranding the visitor.
+        if (sessionStorage.getItem(SSO_ATTEMPTED_KEY) !== '1') {
+          sessionStorage.setItem(SSO_ATTEMPTED_KEY, '1');
+          try {
+            const silent = await userManager.signinSilent();
+            finish(silent && !silent.expired ? silent : null);
+            return;
+          } catch {
+            /* no session — expected for anonymous visitors */
+          }
+        }
+        finish(null);
+      } catch (err) {
+        console.warn('[auth] init error', err);
+        finish(null);
+      }
+    })();
+
+    const onLoaded = (u: User) => {
+      if (!cancelled) setUser(u);
+    };
+    const onUnloaded = () => {
+      if (!cancelled) setUser(null);
+    };
+    const onExpired = () => {
+      if (!cancelled) {
+        userManager.removeUser().finally(() => {
+          if (!cancelled) setUser(null);
+        });
+      }
+    };
+
+    userManager.events.addUserLoaded(onLoaded);
+    userManager.events.addUserUnloaded(onUnloaded);
+    userManager.events.addAccessTokenExpired(onExpired);
+
+    return () => {
+      cancelled = true;
+      userManager.events.removeUserLoaded(onLoaded);
+      userManager.events.removeUserUnloaded(onUnloaded);
+      userManager.events.removeAccessTokenExpired(onExpired);
+    };
+  }, []);
+
+  const login = useCallback(async () => {
+    sessionStorage.removeItem(SSO_ATTEMPTED_KEY);
+    await userManager.signinRedirect();
+  }, []);
+
+  const logout = useCallback(async () => {
+    sessionStorage.setItem(SSO_ATTEMPTED_KEY, '1');
+    try {
+      await userManager.signoutRedirect();
+    } catch {
+      await userManager.removeUser().catch(() => {});
+      setUser(null);
+    }
+  }, []);
+
+  const getAccessToken = useCallback(() => user?.access_token, [user]);
+
+  const value = useMemo<AuthContextValue>(() => {
+    const profile = user?.profile;
+    const displayName =
+      (profile?.name as string | undefined) ||
+      [profile?.given_name, profile?.family_name].filter(Boolean).join(' ') ||
+      '';
+    const email = (profile?.email as string | undefined) ?? '';
+    const picture = (profile?.picture as string | undefined) ?? null;
+    const isAuthenticated = !!user && !user.expired;
+
+    return {
+      user,
+      status: isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'anonymous',
+      isAuthenticated,
+      isLoading,
+      login,
+      logout,
+      getAccessToken,
+      displayName: displayName || email || 'User',
+      email,
+      initials: computeInitials(displayName, email),
+      picture,
+    };
+  }, [user, isLoading, login, logout, getAccessToken]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/** Auth state + actions. Must be called inside an {@link AuthProvider}. */
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within <AuthProvider>');
+  return ctx;
+}

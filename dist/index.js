@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createContext, useState, useRef, useEffect, useMemo, useCallback, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Tag, GitPullRequest, ExternalLink, Search, ChevronUp, ChevronDown } from 'lucide-react';
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
+import { WebStorageStateStore, UserManager } from 'oidc-client-ts';
 
 // src/releaseNotes/ReleaseNotesPanel.tsx
 
@@ -477,5 +478,171 @@ function ReleaseNotesButton({
     )
   ] });
 }
+var ZITADEL_AUTHORITY = "https://swissnovo-ekqvxs.ch1.zitadel.cloud/";
+var ZITADEL_CLIENT_ID = "366334583324661156";
+var origin = typeof window !== "undefined" ? window.location.origin : "";
+var settings = {
+  authority: ZITADEL_AUTHORITY,
+  client_id: ZITADEL_CLIENT_ID,
+  redirect_uri: `${origin}/`,
+  post_logout_redirect_uri: `${origin}/`,
+  silent_redirect_uri: `${origin}/silent-callback.html`,
+  response_type: "code",
+  scope: "openid profile email",
+  loadUserInfo: true,
+  automaticSilentRenew: true,
+  monitorSession: false,
+  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  stateStore: new WebStorageStateStore({ store: window.localStorage })
+};
+var userManager = new UserManager(settings);
+userManager.events.addSilentRenewError((e) => {
+  console.warn("[auth] silent renew error", e);
+});
+var SSO_ATTEMPTED_KEY = "swissnovo:silent_sso_attempted";
+async function getExistingUser() {
+  try {
+    const user = await userManager.getUser();
+    return user && !user.expired ? user : null;
+  } catch {
+    return null;
+  }
+}
+function urlHasAuthParams(url = new URL(window.location.href)) {
+  const p = url.searchParams;
+  return (p.has("code") || p.has("error")) && p.has("state");
+}
+function stripAuthParams() {
+  const url = new URL(window.location.href);
+  ["code", "state", "session_state", "iss", "error", "error_description"].forEach(
+    (k) => url.searchParams.delete(k)
+  );
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+var AuthContext = createContext(void 0);
+function computeInitials(name, email) {
+  const source = name.trim() || email.trim();
+  if (!source) return "?";
+  if (source.includes("@")) return source[0].toUpperCase();
+  const parts = source.split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((p) => p[0].toUpperCase()).join("") || source[0].toUpperCase();
+}
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initStarted = useRef(false);
+  useEffect(() => {
+    if (initStarted.current) return;
+    initStarted.current = true;
+    let cancelled = false;
+    const finish = (loaded) => {
+      if (cancelled) return;
+      setUser(loaded);
+      setIsLoading(false);
+    };
+    (async () => {
+      try {
+        if (urlHasAuthParams()) {
+          try {
+            const completed = await userManager.signinRedirectCallback();
+            sessionStorage.setItem(SSO_ATTEMPTED_KEY, "1");
+            stripAuthParams();
+            finish(completed ?? null);
+            return;
+          } catch (err) {
+            sessionStorage.setItem(SSO_ATTEMPTED_KEY, "1");
+            stripAuthParams();
+            console.warn("[auth] sign-in callback failed", err);
+            finish(null);
+            return;
+          }
+        }
+        const existing = await userManager.getUser();
+        if (existing && !existing.expired) {
+          finish(existing);
+          return;
+        }
+        if (existing?.expired) await userManager.removeUser().catch(() => {
+        });
+        if (sessionStorage.getItem(SSO_ATTEMPTED_KEY) !== "1") {
+          sessionStorage.setItem(SSO_ATTEMPTED_KEY, "1");
+          try {
+            const silent = await userManager.signinSilent();
+            finish(silent && !silent.expired ? silent : null);
+            return;
+          } catch {
+          }
+        }
+        finish(null);
+      } catch (err) {
+        console.warn("[auth] init error", err);
+        finish(null);
+      }
+    })();
+    const onLoaded = (u) => {
+      if (!cancelled) setUser(u);
+    };
+    const onUnloaded = () => {
+      if (!cancelled) setUser(null);
+    };
+    const onExpired = () => {
+      if (!cancelled) {
+        userManager.removeUser().finally(() => {
+          if (!cancelled) setUser(null);
+        });
+      }
+    };
+    userManager.events.addUserLoaded(onLoaded);
+    userManager.events.addUserUnloaded(onUnloaded);
+    userManager.events.addAccessTokenExpired(onExpired);
+    return () => {
+      cancelled = true;
+      userManager.events.removeUserLoaded(onLoaded);
+      userManager.events.removeUserUnloaded(onUnloaded);
+      userManager.events.removeAccessTokenExpired(onExpired);
+    };
+  }, []);
+  const login = useCallback(async () => {
+    sessionStorage.removeItem(SSO_ATTEMPTED_KEY);
+    await userManager.signinRedirect();
+  }, []);
+  const logout = useCallback(async () => {
+    sessionStorage.setItem(SSO_ATTEMPTED_KEY, "1");
+    try {
+      await userManager.signoutRedirect();
+    } catch {
+      await userManager.removeUser().catch(() => {
+      });
+      setUser(null);
+    }
+  }, []);
+  const getAccessToken = useCallback(() => user?.access_token, [user]);
+  const value = useMemo(() => {
+    const profile = user?.profile;
+    const displayName = profile?.name || [profile?.given_name, profile?.family_name].filter(Boolean).join(" ") || "";
+    const email = profile?.email ?? "";
+    const picture = profile?.picture ?? null;
+    const isAuthenticated = !!user && !user.expired;
+    return {
+      user,
+      status: isLoading ? "loading" : isAuthenticated ? "authenticated" : "anonymous",
+      isAuthenticated,
+      isLoading,
+      login,
+      logout,
+      getAccessToken,
+      displayName: displayName || email || "User",
+      email,
+      initials: computeInitials(displayName, email),
+      picture
+    };
+  }, [user, isLoading, login, logout, getAccessToken]);
+  return /* @__PURE__ */ jsx(AuthContext.Provider, { value, children });
+}
+function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within <AuthProvider>");
+  return ctx;
+}
 
-export { KIND_META, ReleaseNotesButton, ReleaseNotesPanel };
+export { AuthProvider, KIND_META, ReleaseNotesButton, ReleaseNotesPanel, SSO_ATTEMPTED_KEY, getExistingUser, stripAuthParams, urlHasAuthParams, useAuth, userManager };

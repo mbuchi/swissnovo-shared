@@ -4,3 +4,13 @@ export { KIND_META } from './releaseNotes/types';
 export type { ChangeKind, ChangeItem, Release } from './releaseNotes/types';
 export type { ReleaseNotesPanelProps } from './releaseNotes/ReleaseNotesPanel';
 export type { ReleaseNotesButtonProps } from './releaseNotes/ReleaseNotesButton';
+
+export { AuthProvider, useAuth } from './auth/AuthProvider';
+export type { AuthContextValue, AuthStatus } from './auth/AuthProvider';
+export {
+  userManager,
+  getExistingUser,
+  urlHasAuthParams,
+  stripAuthParams,
+  SSO_ATTEMPTED_KEY,
+} from './auth/userManager';
