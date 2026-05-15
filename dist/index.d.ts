@@ -110,9 +110,15 @@ declare const SSO_ATTEMPTED_KEY = "swissnovo:silent_sso_attempted";
  * token to API requests (e.g. the screenshot/image service) outside React.
  */
 declare function getExistingUser(): Promise<User | null>;
+/**
+ * The current user's bearer token for API calls made outside React — the
+ * id_token (a JWT, so a backend can decode `sub`) when present, else the
+ * access_token. Null when there is no signed-in, non-expired user.
+ */
+declare function getAuthToken(): Promise<string | null>;
 /** True when the current URL carries an OIDC redirect-callback (code/error + state). */
 declare function urlHasAuthParams(url?: URL): boolean;
 /** Strips OIDC callback query params from the address bar. */
 declare function stripAuthParams(): void;
 
-export { type AuthContextValue, AuthProvider, type AuthStatus, type ChangeItem, type ChangeKind, KIND_META, type Release, ReleaseNotesButton, type ReleaseNotesButtonProps, ReleaseNotesPanel, type ReleaseNotesPanelProps, SSO_ATTEMPTED_KEY, getExistingUser, stripAuthParams, urlHasAuthParams, useAuth, userManager };
+export { type AuthContextValue, AuthProvider, type AuthStatus, type ChangeItem, type ChangeKind, KIND_META, type Release, ReleaseNotesButton, type ReleaseNotesButtonProps, ReleaseNotesPanel, type ReleaseNotesPanelProps, SSO_ATTEMPTED_KEY, getAuthToken, getExistingUser, stripAuthParams, urlHasAuthParams, useAuth, userManager };

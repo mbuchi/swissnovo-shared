@@ -50,6 +50,16 @@ export async function getExistingUser(): Promise<User | null> {
   }
 }
 
+/**
+ * The current user's bearer token for API calls made outside React — the
+ * id_token (a JWT, so a backend can decode `sub`) when present, else the
+ * access_token. Null when there is no signed-in, non-expired user.
+ */
+export async function getAuthToken(): Promise<string | null> {
+  const user = await getExistingUser();
+  return user ? user.id_token ?? user.access_token ?? null : null;
+}
+
 /** True when the current URL carries an OIDC redirect-callback (code/error + state). */
 export function urlHasAuthParams(url: URL = new URL(window.location.href)): boolean {
   const p = url.searchParams;

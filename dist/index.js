@@ -508,6 +508,10 @@ async function getExistingUser() {
     return null;
   }
 }
+async function getAuthToken() {
+  const user = await getExistingUser();
+  return user ? user.id_token ?? user.access_token ?? null : null;
+}
 function urlHasAuthParams(url = new URL(window.location.href)) {
   const p = url.searchParams;
   return (p.has("code") || p.has("error")) && p.has("state");
@@ -645,4 +649,4 @@ function useAuth() {
   return ctx;
 }
 
-export { AuthProvider, KIND_META, ReleaseNotesButton, ReleaseNotesPanel, SSO_ATTEMPTED_KEY, getExistingUser, stripAuthParams, urlHasAuthParams, useAuth, userManager };
+export { AuthProvider, KIND_META, ReleaseNotesButton, ReleaseNotesPanel, SSO_ATTEMPTED_KEY, getAuthToken, getExistingUser, stripAuthParams, urlHasAuthParams, useAuth, userManager };

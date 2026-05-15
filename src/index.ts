@@ -10,6 +10,7 @@ export type { AuthContextValue, AuthStatus } from './auth/AuthProvider';
 export {
   userManager,
   getExistingUser,
+  getAuthToken,
   urlHasAuthParams,
   stripAuthParams,
   SSO_ATTEMPTED_KEY,
