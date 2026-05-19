@@ -140,7 +140,7 @@ export function ProfileModal({ user, onClose, dark = false }: ProfileModalProps)
               Choose your avatar
             </div>
             <p className="mb-3 text-[11px] text-gray-500 dark:text-gray-400">
-              Your pick follows you across every Swissnovo app.
+              Your pick follows you across every SwissNovo app.
             </p>
             <div className="grid grid-cols-4 gap-2.5">
               {avatarOptions.map((opt) => {
