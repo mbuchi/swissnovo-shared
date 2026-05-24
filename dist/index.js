@@ -3105,10 +3105,20 @@ var ClaireAssistant = ({
           },
           onMessage: ({ message, role }) => {
             if (!message) return;
-            setVoiceTurns((prev) => [
-              ...prev,
-              { id: newId(), role, text: message }
-            ]);
+            setVoiceTurns((prev) => {
+              const last = prev[prev.length - 1];
+              if (last && last.role === role) {
+                const joinNeedsSpace = !/\s$/.test(last.text) && !/^[\s.,;:!?)\]}»"']/.test(message);
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...last,
+                    text: last.text + (joinNeedsSpace ? " " : "") + message
+                  }
+                ];
+              }
+              return [...prev, { id: newId(), role, text: message }];
+            });
           },
           onDebug: (info) => {
             console.log("[claire-voice]", info);
