@@ -527,10 +527,26 @@ const ClaireAssistant = ({
           },
           onMessage: ({ message, role }) => {
             if (!message) return;
-            setVoiceTurns((prev) => [
-              ...prev,
-              { id: newId(), role, text: message },
-            ]);
+            // Gemini Live streams transcripts as small deltas (often per
+            // word). Coalesce consecutive same-speaker chunks into one
+            // bubble — when the role changes, a new bubble starts. Add a
+            // separator space only when neither side of the join already
+            // has one and the new chunk doesn't begin with punctuation.
+            setVoiceTurns((prev) => {
+              const last = prev[prev.length - 1];
+              if (last && last.role === role) {
+                const joinNeedsSpace =
+                  !/\s$/.test(last.text) && !/^[\s.,;:!?)\]}»"']/.test(message);
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...last,
+                    text: last.text + (joinNeedsSpace ? ' ' : '') + message,
+                  },
+                ];
+              }
+              return [...prev, { id: newId(), role, text: message }];
+            });
           },
           onDebug: (info: unknown) => {
             // eslint-disable-next-line no-console
