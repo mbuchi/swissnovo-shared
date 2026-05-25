@@ -15,8 +15,6 @@ import {
   Phone,
   PhoneOff,
   Send,
-  Volume2,
-  VolumeX,
   X,
 } from 'lucide-react';
 import {
@@ -25,7 +23,6 @@ import {
   buildParcelContextSummary,
   generateParcelChatReply,
 } from './geminiClient';
-import { synthesizeSpeech } from './elevenLabsClient';
 import { startVoiceCall, type VoiceCallSession } from './voiceCall';
 import { sendClaireMessageSignal } from './signal';
 import { fetchClaireContext } from './claireContext';
@@ -66,16 +63,6 @@ export interface ClaireAssistantProps {
   geminiApiKey?: string;
   /** Optional Gemini model override (defaults to gemini-3.1-flash-lite). */
   geminiModel?: string;
-  /**
-   * ElevenLabs API key — when supplied, Claire can speak her replies aloud
-   * via text-to-speech. Read by the app from its own VITE_ELEVENLABS_API_KEY.
-   * Omit it to keep Claire text-only (the speaker controls never render).
-   */
-  elevenLabsApiKey?: string;
-  /** Optional ElevenLabs voice id (defaults to the "Sarah" preset voice). */
-  elevenLabsVoiceId?: string;
-  /** Optional ElevenLabs model override (defaults to eleven_turbo_v2_5). */
-  elevenLabsModel?: string;
   /**
    * Enable Claire's full voice-call mode (Gemini Live via the project_RES
    * WebSocket bridge at wss://res.zeroo.ch/res_api/claire/voice/ws). When
@@ -192,18 +179,12 @@ function renderInlineBold(line: string): ReactNode {
  *  - expose an `/api/signal-collect` proxy,
  *  - pass its `VITE_GEMINI_API_KEY` as `geminiApiKey`,
  *  - be wrapped in this package's <AuthProvider>.
- * Optionally, passing `elevenLabsApiKey` unlocks Claire's voice: a speaker
- * toggle in the header (auto-speak replies) plus a per-message play button,
- * driven by ElevenLabs text-to-speech. Omit the key to keep her text-only.
  * The avatar is inlined — no per-app public/ asset is needed.
  */
 const ClaireAssistant = ({
   appName,
   geminiApiKey,
   geminiModel,
-  elevenLabsApiKey,
-  elevenLabsVoiceId,
-  elevenLabsModel,
   voiceCallEnabled = false,
   properties,
   enrichment,
@@ -224,34 +205,11 @@ const ClaireAssistant = ({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [contextLoading, setContextLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  // Claire's voice (ElevenLabs TTS) — only wired when the host app supplies
-  // an ElevenLabs key. `voiceEnabled` is the auto-speak toggle; `speakingId`
-  // is the assistant message being synthesized or played; `speechReady`
-  // flips true once its audio actually starts (spinner → stop icon).
-  const voiceAvailable = useMemo(
-    () => Boolean(elevenLabsApiKey),
-    [elevenLabsApiKey],
-  );
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const [speakingId, setSpeakingId] = useState<string | null>(null);
-  const [speechReady, setSpeechReady] = useState(false);
-  const [speechError, setSpeechError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
-  const speechAbortRef = useRef<AbortController | null>(null);
-  const speakingIdRef = useRef<string | null>(null);
-  const voiceEnabledRef = useRef(voiceEnabled);
-  useEffect(() => {
-    speakingIdRef.current = speakingId;
-  }, [speakingId]);
-  useEffect(() => {
-    voiceEnabledRef.current = voiceEnabled;
-  }, [voiceEnabled]);
 
   // Claire's voice-call mode (Gemini Live via the project_RES WS bridge).
   // The chat-card overlays a live-call UI while a call is active; mic,
@@ -297,11 +255,17 @@ const ClaireAssistant = ({
   });
   useEffect(() => {
     const controller = new AbortController();
+    let cancelled = false;
     setOfficial({ text: '' });
+    setContextLoading(true);
     void fetchClaireContext(lngLat.lng, lngLat.lat, controller.signal)
-      .then((res) => setOfficial(res))
-      .catch(() => {});
-    return () => controller.abort();
+      .then((res) => { if (!cancelled) setOfficial(res); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setContextLoading(false); });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [lngLat.lng, lngLat.lat]);
 
   // Surrounding OSM POIs (schools, transit, shops, etc.) fetched from the
@@ -344,38 +308,19 @@ const ClaireAssistant = ({
     setVoiceTurns([]);
   }, []);
 
-  // Stop and fully tear down any in-flight or playing speech.
-  const stopSpeech = useCallback(() => {
-    speechAbortRef.current?.abort();
-    speechAbortRef.current = null;
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current = null;
-    }
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
-    }
-    setSpeakingId(null);
-    setSpeechReady(false);
-  }, []);
-
   // Reset conversation whenever the targeted parcel changes — the chat must
   // refresh its context to match the freshly selected parcel. Any live voice
   // call is hung up too: it was anchored to the previous parcel's context.
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    stopSpeech();
     void endCall();
     setMessages([]);
     setInput('');
     setError(null);
-    setSpeechError(null);
     setCallError(null);
     setLoading(false);
-  }, [lngLat.lng, lngLat.lat, stopSpeech, endCall]);
+  }, [lngLat.lng, lngLat.lat, endCall]);
 
   // Restore this parcel's stored conversation for the signed-in user. Runs
   // after the reset effect above, so a saved thread re-populates the chat;
@@ -420,58 +365,9 @@ const ClaireAssistant = ({
   useEffect(
     () => () => {
       abortRef.current?.abort();
-      stopSpeech();
       void endCall();
     },
-    [stopSpeech, endCall],
-  );
-
-  // Speak one assistant message aloud via ElevenLabs. Clicking the speaker
-  // on a message that is already active stops it (toggle). Failures surface
-  // as a small non-blocking note — a broken voice never breaks the chat.
-  const speakMessage = useCallback(
-    async (id: string, text: string) => {
-      if (!elevenLabsApiKey) return;
-      if (speakingIdRef.current === id) {
-        stopSpeech();
-        return;
-      }
-      stopSpeech();
-      const controller = new AbortController();
-      speechAbortRef.current = controller;
-      setSpeakingId(id);
-      setSpeechReady(false);
-      setSpeechError(null);
-      try {
-        const blob = await synthesizeSpeech({
-          apiKey: elevenLabsApiKey,
-          voiceId: elevenLabsVoiceId,
-          model: elevenLabsModel,
-          text,
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        const url = URL.createObjectURL(blob);
-        audioUrlRef.current = url;
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        const clear = () => {
-          if (speakingIdRef.current === id) stopSpeech();
-        };
-        audio.onended = clear;
-        audio.onerror = clear;
-        await audio.play();
-        if (speakingIdRef.current === id) setSpeechReady(true);
-      } catch (err) {
-        if ((err as Error)?.name === 'AbortError') return;
-        setSpeechError(
-          err instanceof Error ? err.message : 'Claire could not speak.',
-        );
-        setSpeakingId(null);
-        setSpeechReady(false);
-      }
-    },
-    [elevenLabsApiKey, elevenLabsVoiceId, elevenLabsModel, stopSpeech],
+    [endCall],
   );
 
   // Open a live spoken conversation with Claire. The mic / playback /
@@ -627,11 +523,6 @@ const ClaireAssistant = ({
           { id: assistantId, role: 'assistant', content: reply },
         ]);
 
-        // Auto-speak the reply when Claire's voice toggle is on.
-        if (voiceEnabledRef.current) {
-          void speakMessage(assistantId, reply);
-        }
-
         // Persist the completed turn so revisiting this parcel restores the
         // conversation. Scoped per signed-in user; no-ops when signed out.
         if (parcelId) {
@@ -673,7 +564,6 @@ const ClaireAssistant = ({
       appName,
       geminiApiKey,
       geminiModel,
-      speakMessage,
     ],
   );
 
@@ -698,7 +588,14 @@ const ClaireAssistant = ({
   const showQuickPrompts =
     messages.length === 0 && !loading && !historyLoading;
 
-  const subtitle = headerAddress ? `About ${headerAddress}` : 'Powered by Gemini';
+  const displayAddress = headerAddress || official.address;
+  const subtitle = contextLoading && !displayAddress
+    ? 'Syncing parcel…'
+    : displayAddress
+      ? `About ${displayAddress}`
+      : parcelId
+        ? `Parcel ${parcelId}`
+        : 'Powered by Gemini';
 
   // A compact circular launcher anchored to the bottom-right corner. It may
   // overlap the parcel info panel — accepted for now per product direction.
@@ -761,9 +658,13 @@ const ClaireAssistant = ({
           />
           <span
             className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ${
-              darkMode
-                ? 'bg-emerald-400 ring-[#0b0f15]'
-                : 'bg-emerald-500 ring-white'
+              contextLoading
+                ? darkMode
+                  ? 'bg-amber-400 ring-[#0b0f15] animate-pulse'
+                  : 'bg-amber-500 ring-white animate-pulse'
+                : darkMode
+                  ? 'bg-emerald-400 ring-[#0b0f15]'
+                  : 'bg-emerald-500 ring-white'
             }`}
           />
         </div>
@@ -776,11 +677,12 @@ const ClaireAssistant = ({
             Claire
           </div>
           <div
-            className={`text-[10.5px] font-medium uppercase tracking-[0.1em] mt-0.5 truncate ${
+            className={`flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.1em] mt-0.5 ${
               darkMode ? 'text-amber-200/70' : 'text-amber-700/80'
             }`}
           >
-            {subtitle}
+            {contextLoading && <Loader2 size={9} className="animate-spin shrink-0" />}
+            <span className="truncate">{subtitle}</span>
           </div>
         </div>
         {voiceCallEnabled && (
@@ -801,31 +703,6 @@ const ClaireAssistant = ({
             }`}
           >
             {callStatus === 'idle' ? <Phone size={15} /> : <PhoneOff size={15} />}
-          </button>
-        )}
-        {voiceAvailable && (
-          <button
-            type="button"
-            onClick={() =>
-              setVoiceEnabled((v) => {
-                if (v) stopSpeech();
-                return !v;
-              })
-            }
-            aria-pressed={voiceEnabled}
-            aria-label={voiceEnabled ? 'Mute Claire' : 'Let Claire speak'}
-            title={
-              voiceEnabled
-                ? 'Claire speaks her replies aloud — click to mute'
-                : 'Hear Claire speak her replies'
-            }
-            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-              voiceEnabled
-                ? 'text-amber-300 bg-amber-400/15 ring-1 ring-amber-300/25'
-                : 'text-gray-400 hover:text-white hover:bg-white/[0.08]'
-            }`}
-          >
-            {voiceEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
           </button>
         )}
         <button
@@ -913,40 +790,6 @@ const ClaireAssistant = ({
                 >
                   {renderAssistantText(msg.content)}
                 </div>
-                {voiceAvailable && (
-                  <button
-                    type="button"
-                    onClick={() => void speakMessage(msg.id, msg.content)}
-                    aria-label={
-                      speakingId === msg.id
-                        ? 'Stop Claire speaking'
-                        : 'Play this reply aloud'
-                    }
-                    title={
-                      speakingId === msg.id ? 'Stop' : 'Hear this reply'
-                    }
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-gray-500 hover:text-amber-200 hover:bg-white/[0.05] transition-colors"
-                  >
-                    {speakingId === msg.id ? (
-                      speechReady ? (
-                        <>
-                          <VolumeX size={11} />
-                          Stop
-                        </>
-                      ) : (
-                        <>
-                          <Loader2 size={11} className="animate-spin" />
-                          Loading…
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <Volume2 size={11} />
-                        Play
-                      </>
-                    )}
-                  </button>
-                )}
               </div>
             </div>
           ),
@@ -992,13 +835,6 @@ const ClaireAssistant = ({
           >
             <AlertCircle size={13} className="shrink-0 mt-0.5" />
             <span>{error}</span>
-          </div>
-        )}
-
-        {speechError && (
-          <div className="flex items-start gap-2 rounded-xl px-3 py-2 text-[11.5px] bg-amber-500/10 text-amber-200/90 ring-1 ring-amber-400/20">
-            <VolumeX size={12} className="shrink-0 mt-0.5" />
-            <span>Claire’s voice is unavailable: {speechError}</span>
           </div>
         )}
 

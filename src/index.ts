@@ -71,12 +71,6 @@ export type {
   ParcelContextInput,
   GeminiCallOptions,
 } from './claire/geminiClient';
-export {
-  synthesizeSpeech,
-  plainSpeechText,
-  ElevenLabsConfigError,
-} from './claire/elevenLabsClient';
-export type { SpeechOptions } from './claire/elevenLabsClient';
 export { startVoiceCall } from './claire/voiceCall';
 export type {
   CallMode,
