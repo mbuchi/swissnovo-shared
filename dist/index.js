@@ -1,6 +1,6 @@
+import './chunk-6YKTLPIC.js';
 import { fetchGeminiWithFallback } from './chunk-JGEYZH5N.js';
 export { GEMINI_FALLBACK_CHAIN, buildGeminiModelChain, fetchGeminiWithFallback, isRetriableGeminiStatus } from './chunk-JGEYZH5N.js';
-import './chunk-6YKTLPIC.js';
 export { RES_API_BASE_URL, createResApiClient } from './chunk-J3SBZ4RV.js';
 import { createContext, useState, useRef, useEffect, useMemo, useCallback, useContext, useInsertionEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -3758,6 +3758,205 @@ var ClaireAssistant = ({
   );
 };
 var ClaireAssistant_default = ClaireAssistant;
+
+// src/cache/clientCache.ts
+var LocalStorageCache = class {
+  constructor(prefix, ttlMinutes = 60) {
+    this.prefix = prefix;
+    this.ttlMs = ttlMinutes * 60 * 1e3;
+  }
+  getKey(key) {
+    return `${this.prefix}:${key}`;
+  }
+  get(key) {
+    try {
+      const item = localStorage.getItem(this.getKey(key));
+      if (!item) return null;
+      const entry = JSON.parse(item);
+      const now = Date.now();
+      if (now - entry.timestamp > this.ttlMs) {
+        this.delete(key);
+        return null;
+      }
+      return entry.data;
+    } catch {
+      return null;
+    }
+  }
+  set(key, data) {
+    try {
+      const entry = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(this.getKey(key), JSON.stringify(entry));
+    } catch {
+    }
+  }
+  delete(key) {
+    localStorage.removeItem(this.getKey(key));
+  }
+  clear() {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(this.prefix)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  }
+};
+var IndexedDBCache = class {
+  constructor(dbName, storeName, options = {}) {
+    this.db = null;
+    this.dbName = dbName;
+    this.storeName = storeName;
+    this.ttlMs = options.ttlMinutes && options.ttlMinutes > 0 ? options.ttlMinutes * 60 * 1e3 : 0;
+    this.maxBytes = options.maxBytes ?? Infinity;
+    this.version = options.version ?? 1;
+  }
+  byteLength(data) {
+    try {
+      return new TextEncoder().encode(JSON.stringify(data)).length;
+    } catch {
+      return 0;
+    }
+  }
+  async openDB() {
+    if (this.db) return this.db;
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName, { keyPath: "key" });
+        }
+      };
+      request.onsuccess = (event) => {
+        this.db = event.target.result;
+        resolve(this.db);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+  async get(key) {
+    try {
+      const db = await this.openDB();
+      const entry = await new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, "readonly");
+        const request = tx.objectStore(this.storeName).get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(void 0);
+      });
+      if (!entry) return null;
+      if (entry.ttlMs > 0 && Date.now() - entry.timestamp > entry.ttlMs) {
+        await this.delete(key);
+        return null;
+      }
+      this.touch(key).catch(() => {
+      });
+      return entry.data;
+    } catch {
+      return null;
+    }
+  }
+  /** Update an entry's lastAccessed timestamp without rewriting its data. */
+  async touch(key) {
+    const db = await this.openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(this.storeName, "readwrite");
+      const store = tx.objectStore(this.storeName);
+      const request = store.get(key);
+      request.onsuccess = () => {
+        const entry = request.result;
+        if (entry) {
+          entry.lastAccessed = Date.now();
+          store.put(entry);
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  }
+  async set(key, data) {
+    try {
+      const db = await this.openDB();
+      const now = Date.now();
+      const entry = {
+        key,
+        data,
+        timestamp: now,
+        lastAccessed: now,
+        size: this.byteLength(data),
+        ttlMs: this.ttlMs
+      };
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(this.storeName, "readwrite");
+        const request = tx.objectStore(this.storeName).put(entry);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+      if (this.maxBytes !== Infinity) {
+        await this.enforceSizeLimit();
+      }
+    } catch {
+    }
+  }
+  /** Evict least-recently-used entries until total size is within `maxBytes`. */
+  async enforceSizeLimit() {
+    try {
+      const db = await this.openDB();
+      const entries = await new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, "readonly");
+        const request = tx.objectStore(this.storeName).getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => resolve([]);
+      });
+      let total = entries.reduce((sum, e) => sum + (e.size || 0), 0);
+      if (total <= this.maxBytes) return;
+      const ordered = entries.slice().sort((a, b) => (a.lastAccessed || a.timestamp) - (b.lastAccessed || b.timestamp));
+      await new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, "readwrite");
+        const store = tx.objectStore(this.storeName);
+        for (const entry of ordered) {
+          if (total <= this.maxBytes) break;
+          store.delete(entry.key);
+          total -= entry.size || 0;
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      });
+    } catch {
+    }
+  }
+  async delete(key) {
+    try {
+      const db = await this.openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, "readwrite");
+        const store = tx.objectStore(this.storeName);
+        store.delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      });
+    } catch {
+    }
+  }
+  /** Remove every entry in this store. */
+  async clear() {
+    try {
+      const db = await this.openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, "readwrite");
+        tx.objectStore(this.storeName).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      });
+    } catch {
+    }
+  }
+};
 var STYLE_ID = "swn-skeleton-styles";
 var STYLE_CONTENT = '.swn-skeleton{--swn-skeleton-color:rgba(15,23,42,0.09);border-radius:8px;background-color:var(--swn-skeleton-color);animation:swn-skeleton-blink 1.8s ease-in-out infinite}.swn-skeleton-group{display:flex;flex-direction:column}.dark .swn-skeleton,[data-theme="dark"] .swn-skeleton{--swn-skeleton-color:rgba(255,255,255,0.11)}@keyframes swn-skeleton-blink{0%,100%{opacity:1}50%{opacity:0.4}}@media (prefers-reduced-motion:reduce){.swn-skeleton{animation-duration:3s}}';
 function useSkeletonStyles() {
@@ -4310,4 +4509,4 @@ function ProfileModal({ user, onClose, dark = false }) {
   );
 }
 
-export { AuthProvider, Avatar, ClaireAssistant_default as ClaireAssistant, GEOPOOL_APP_URL, GeminiConfigError, KIND_META, LocaleSelector, LocaleSelector_default as LocaleSelectorDefault, LoginModal, PRM_PRIORITIES, PRM_STATES, PROOM_APP_URL, AuthRequiredError as PrmAuthRequiredError, ProfileModal, RELEASE_NOTES_STRINGS, ReleaseNotesButton, ReleaseNotesPanel, SAVED_PARCELS_STRINGS, SSO_ATTEMPTED_KEY, SWISSNOVO_APP_CATALOG, SWISSNOVO_SUITE_BLURB, SavedParcelsModal, Skeleton, SkeletonGroup, SkeletonText, TOOLBOX_APP_URL, avatarOptions, avatarUrl, avatarUrlById, avatarUrlFromSeed, buildParcelContextSummary, computeLocationScore, createPrmRecord, createSignalClient, defaultProfile, deletePrmRecord, emailOf, fetchClaireContext, fetchClairePOIs, fetchPrmByParcel, fetchPrmRecords, fetchRemoteProfile, firstNameOf, fullNameOf, generateParcelChatReply, getAuthToken, getExistingUser, getProfile, getReleaseNotesStrings, getSavedParcelsStrings, hydrateFromRemote, initialsOf, listClaireConversations, loadClaireConversation, pictureOf, saveClaireConversation, sendClaireMessageSignal, startVoiceCall, stripAuthParams, subscribe as subscribeProfile, updatePrmPriority, updatePrmState, updatePrmTags, updateProfile, urlHasAuthParams, useAuth, useUserProfile, userManager };
+export { AuthProvider, Avatar, ClaireAssistant_default as ClaireAssistant, GEOPOOL_APP_URL, GeminiConfigError, IndexedDBCache, KIND_META, LocalStorageCache, LocaleSelector, LocaleSelector_default as LocaleSelectorDefault, LoginModal, PRM_PRIORITIES, PRM_STATES, PROOM_APP_URL, AuthRequiredError as PrmAuthRequiredError, ProfileModal, RELEASE_NOTES_STRINGS, ReleaseNotesButton, ReleaseNotesPanel, SAVED_PARCELS_STRINGS, SSO_ATTEMPTED_KEY, SWISSNOVO_APP_CATALOG, SWISSNOVO_SUITE_BLURB, SavedParcelsModal, Skeleton, SkeletonGroup, SkeletonText, TOOLBOX_APP_URL, avatarOptions, avatarUrl, avatarUrlById, avatarUrlFromSeed, buildParcelContextSummary, computeLocationScore, createPrmRecord, createSignalClient, defaultProfile, deletePrmRecord, emailOf, fetchClaireContext, fetchClairePOIs, fetchPrmByParcel, fetchPrmRecords, fetchRemoteProfile, firstNameOf, fullNameOf, generateParcelChatReply, getAuthToken, getExistingUser, getProfile, getReleaseNotesStrings, getSavedParcelsStrings, hydrateFromRemote, initialsOf, listClaireConversations, loadClaireConversation, pictureOf, saveClaireConversation, sendClaireMessageSignal, startVoiceCall, stripAuthParams, subscribe as subscribeProfile, updatePrmPriority, updatePrmState, updatePrmTags, updateProfile, urlHasAuthParams, useAuth, useUserProfile, userManager };
