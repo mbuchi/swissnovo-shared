@@ -308,6 +308,19 @@ export type {
   ParcelAerialThumbnailProps,
 } from './map/ParcelAerialThumbnail';
 
+// Suite-standard "pin to comparison" toggle button — one canonical compare
+// control (Scale → Check, red accent) shared by every app with a compare set,
+// so they stop forking their own. Presentational + i18n-agnostic (strings via
+// `labels`); the host owns the comparison state and the open-compare entry.
+export {
+  CompareToggleButton,
+  default as CompareToggleButtonDefault,
+} from './compare/CompareToggleButton';
+export type {
+  CompareToggleButtonLabels,
+  CompareToggleButtonProps,
+} from './compare/CompareToggleButton';
+
 // Suite-standard parcel-panel chrome: the fixed header (aerial · address ·
 // parcel-id chip · status badges · actions · close), the scrollable flexible
 // middle (`children`), and the fixed "Open in" footer — so every map-first
