@@ -1605,6 +1605,95 @@ interface CompareToggleButtonProps {
 }
 declare function CompareToggleButton({ pinned, onToggle, dark, labels, className, }: CompareToggleButtonProps): react_jsx_runtime.JSX.Element;
 
+/**
+ * Suite-standard icon-only action button for parcel/info side panels.
+ *
+ * The single canonical design behind every header action that sits at the top
+ * of a map-first app's parcel panel — Track (save), Export, Open-in, and any
+ * future one-off — so apps stop forking bespoke `px-3 py-1.5 text-xs` text
+ * buttons that drift in size, colour, and dark-mode handling. Lifted from
+ * valoo's reference panel (the "nice pop-up"): a 32×32 (`w-8 h-8`) rounded
+ * square that shows an icon only, never a text label. Pairs pixel-for-pixel
+ * with the shared {@link CompareToggleButton} and the panel's close button.
+ *
+ * Presentational only: it owns no state and resolves no translations. The host
+ * passes the `icon`, an accessible `label` (used for both `title` and
+ * `aria-label` — icon-only controls must always carry an accessible name), a
+ * handler, and a visual `tone`. The label-injection pattern matches the rest of
+ * the shared UI kit (CompareToggleButton / ComparablesPanel / MapUserMenu).
+ *
+ * Set `href` to render an `<a>` instead of a `<button>` (e.g. "open in proom").
+ * Set `busy` to swap the icon for a spinner. Tones:
+ *
+ *  - `ghost`   transparent at rest, neutral hover — the Track/save idle look.
+ *  - `neutral` filled grey + ring — the Export trigger / Compare-unpinned look.
+ *  - `success` emerald — the saved/tracked state (suite-standard "done" accent).
+ *  - `active`  red — a pressed/selected toggle (matches Compare-pinned).
+ *  - `danger`  red text on hover-tint — a transient error state.
+ */
+type PanelActionTone = 'ghost' | 'neutral' | 'success' | 'active' | 'danger';
+interface PanelActionButtonProps {
+    /** Icon node, e.g. `<Bookmark className="w-4 h-4" />`. Centered in the square. */
+    icon: ReactNode;
+    /** Accessible name — set on both `title` and `aria-label`. Always required. */
+    label: string;
+    /** Click handler (button mode). Ignored when `href` is set. */
+    onClick?: () => void;
+    /** Render an `<a>` link instead of a `<button>` (e.g. open-in-proom). */
+    href?: string;
+    /** Link target (only with `href`). `_blank` auto-adds rel="noopener noreferrer". */
+    target?: string;
+    /** Disable the control (also visually applied while `busy`). */
+    disabled?: boolean;
+    /** Swap the icon for a spinning loader (e.g. while saving). */
+    busy?: boolean;
+    /** Dark-mode styling toggle. */
+    dark?: boolean;
+    /** Visual tone. Default `ghost`. */
+    tone?: PanelActionTone;
+    /** `aria-pressed` for toggle-style buttons. */
+    ariaPressed?: boolean;
+    /** Extra classes appended to the control. */
+    className?: string;
+}
+declare function PanelActionButton({ icon, label, onClick, href, target, disabled, busy, dark, tone, ariaPressed, className, }: PanelActionButtonProps): react_jsx_runtime.JSX.Element;
+
+/**
+ * Suite-standard "Export" control for parcel/info side panels.
+ *
+ * The icon-only Download trigger (built on {@link PanelActionButton}, tone
+ * `neutral`) plus the dropdown menu of export formats — lifted from valoo's
+ * reference panel so every app renders the same control instead of forking its
+ * own. Presentational + logic-agnostic: the host supplies the `actions` (each
+ * with its own label, optional hint/icon, and `onSelect` that does the actual
+ * download), and the button handles open/close, outside-click, and Escape.
+ */
+interface ExportMenuAction {
+    /** Stable key. */
+    id: string;
+    /** Primary row label (e.g. "PDF report"). */
+    label: string;
+    /** Optional secondary hint line. */
+    hint?: string;
+    /** Optional leading icon node, e.g. `<FileText className="w-4 h-4" />`. */
+    icon?: ReactNode;
+    /** Fired when the row is chosen — host performs the export. */
+    onSelect: () => void;
+}
+interface ExportMenuButtonLabels {
+    /** Trigger `title` / `aria-label` (e.g. "Export"). */
+    menuLabel: string;
+    /** Optional small section heading above the format list. */
+    sectionLabel?: string;
+}
+interface ExportMenuButtonProps {
+    actions: ExportMenuAction[];
+    labels: ExportMenuButtonLabels;
+    dark?: boolean;
+    className?: string;
+}
+declare function ExportMenuButton({ actions, labels, dark, className, }: ExportMenuButtonProps): react_jsx_runtime.JSX.Element | null;
+
 interface LaunchApp {
     /** App id == subdomain: `https://<id>.aireon.ch/`. */
     id: string;
@@ -2336,4 +2425,4 @@ interface VirtualListProps<T> {
 }
 declare function VirtualList<T>({ items, renderItem, estimateSize, overscan, getItemKey, onEndReached, endReachedThreshold, loading, skeletonRows, emptyMessage, className, style, ariaLabel, }: VirtualListProps<T>): JSX.Element;
 
-export { AIREON_HUB_ICON_URL, AIREON_HUB_MARK_URL, AIREON_HUB_URL, AIREON_LOGO_ASPECT, AIREON_LOGO_PATH, AIREON_LOGO_VIEWBOX, AddressSearch, AddressSearch as AddressSearchDefault, type AddressSearchLabels, type AddressSearchProps, type AddressSearchResult, AireonAppWordmark, AireonAppWordmark as AireonAppWordmarkDefault, type AireonAppWordmarkProps, type AireonAppWordmarkSize, AireonHubLink, AireonHubLink as AireonHubLinkDefault, type AireonHubLinkProps, AireonLogo, AireonLogo as AireonLogoDefault, type AireonLogoProps, AppNavbar, AppNavbar as AppNavbarDefault, type AppNavbarProps, type AuthContextValue, AuthProvider, type AuthProviderProps, type AuthStatus, Avatar, type AvatarGroup, type AvatarOption, type AvatarProps, BUG_REPORT_STRINGS, BugReportButton, type BugReportButtonProps, type BugReportStrings, type CallMode, type CallRole, type ChangeItem, type ChangeKind, type ChatTurn, ClaireAssistant, type ClaireAssistantProps, type ClaireContext, type ClaireConversationSummary, type ClairePOIs, type ClairePoiMapPoint, type ClaireTurn, CompareToggleButton, CompareToggleButton as CompareToggleButtonDefault, type CompareToggleButtonLabels, type CompareToggleButtonProps, type CreatePrmInput, DATA_TABLE_STRINGS_EN, DataTable, type DataTableProps, type DataTableStrings, type ErrorKind, ErrorLogBoundary, type ErrorLogBoundaryProps, type ErrorLogContext, type ErrorLogger, type ErrorLoggerOptions, type ErrorSeverity, FlagApiError, type FlagFetchOptions, type FlagImageMode, type FlagRecord, GEOPOOL_APP_URL, type GeminiCallOptions, GeminiConfigError, type Gender, KIND_META, LAUNCH_APPS, LAUNCH_DEFAULT_ZOOM, LEGACY_GEOPOOL_APP_URL, LEGACY_PROOM_APP_URL, LEGACY_TOOLBOX_APP_URL, type LaunchApp, type Locale$3 as Locale, LocaleSelector, LocaleSelector as LocaleSelectorDefault, type LocaleSelectorProps, type LocationScore, LoginModal, type LoginModalFeature, type LoginModalProps, MapToolbar, MapToolbar as MapToolbarDefault, type MapToolbarLabels, type MapToolbarProps, MapUserMenu, type MapUserMenuAction, MapUserMenu as MapUserMenuDefault, type MapUserMenuLabels, type MapUserMenuProps, MunicipalityFlag, type MunicipalityFlagProps, NavIconButton, NavIconButton as NavIconButtonDefault, type NavIconButtonProps, type OpenReplay, type OpenReplayOptions, OpenWithMenu, OpenWithMenu as OpenWithMenuDefault, type OpenWithMenuProps, OverflowNav, OverflowNav as OverflowNavDefault, type OverflowNavItem, type OverflowNavMode, type OverflowNavProps, PRM_PRIORITIES, PRM_STATES, PROOM_APP_URL, ParcelAerialThumbnail, ParcelAerialThumbnail as ParcelAerialThumbnailDefault, type ParcelAerialThumbnailLabels, type ParcelAerialThumbnailProps, type ParcelBadgeTone, type ParcelContextInput, ParcelOpenInMenu, type ParcelOpenInMenuProps, ParcelPanelShell, ParcelPanelShell as ParcelPanelShellDefault, type ParcelPanelShellLabels, type ParcelPanelShellProps, ParcelStatusBadge, type ParcelStatusBadgeProps, Portal, type PortalProps, AuthRequiredError as PrmAuthRequiredError, type Locale$2 as PrmLocale, type PrmPriority, type PrmRecord, type PrmState, ProfileModal, type ProfileModalProps, RELEASE_NOTES_STRINGS, type RecordSearchInput, type Release, ReleaseNotesButton, type ReleaseNotesButtonProps, type ReleaseNotesController, ReleaseNotesPanel, type ReleaseNotesPanelProps, type ReleaseNotesStrings, SAVED_PARCELS_STRINGS, SCOORE_CATEGORY_COLORS, SCOORE_RADIUS_CIRCLES, SEARCH_HISTORY_API_BASE, SEARCH_HISTORY_STRINGS, SSO_ATTEMPTED_KEY, SWISSNOVO_APP_CATALOG, SWISSNOVO_SUITE_BLURB, SavedParcelsModal, type SavedParcelsModalProps, type SavedParcelsStrings, ScooreMiniMap, ScooreMiniMap as ScooreMiniMapDefault, type ScooreMiniMapLabels, type ScooreMiniMapProps, type SearchHistoryEntry, type Locale as SearchHistoryLocale, SearchHistoryModal, type SearchHistoryModalProps, type SearchHistorySnapshot, type SearchHistoryStatus, type SearchHistoryStore, type SearchHistoryStrings, SettingsMenu, SettingsMenu as SettingsMenuDefault, type SettingsMenuItem, type SettingsMenuProps, type SignalClient, type SignalClientOptions, type SignalTarget, Skeleton, SkeletonGroup, type SkeletonProps, type SkeletonProviderProps, SkeletonText, type SkeletonTextProps, type StartVoiceCallOptions, type StreamParcelChatReplyOptions, type SwissnovoProfile, TOOLBOX_APP_URL, type UseFocusTrapOptions, type UseMunicipalityFlagResult, type UseReleaseNotesOptions, type UseSearchHistoryOptions, type UseSearchHistoryResult, type UseUserProfileResult, VirtualList, type VirtualListProps, type VoiceCallCallbacks, type VoiceCallSession, type ZIndexKey, Z_INDEX, aerialThumbnailZoom, avatarOptions, avatarUrl, avatarUrlById, avatarUrlFromSeed, buildDeepLink, buildParcelContextSummary, buildSwisstopoAerialUrl, canonicalKind, clearFlagCache, clearSearchHistoryRemote, computeLocationScore, createErrorLogger, createPrmRecord, createScooreCircleGeoJSON, createSignalClient, defaultProfile, deletePrmRecord, deleteSearchEntry, emailOf, fetchClaireContext, fetchClairePOIs, fetchFlagSvgMarkup, fetchPrmByParcel, fetchPrmRecords, fetchRemoteProfile, fetchSearchHistory, firstNameOf, fullNameOf, generateParcelChatReply, getAllFlags, getAuthToken, getBugReportStrings, getExistingUser, getFlagApiBase, getFlagByBfs, getFlagsByCanton, getProfile, getReleaseNotesStrings, getSavedParcelsStrings, getSearchHistoryStrings, hydrateFromRemote, identifyOpenReplayUser, initOpenReplay, initialsOf, installErrorLogging, isSvgFlagUrl, listClaireConversations, loadClaireConversation, openInApp, pictureOf, recordSearchEntry, resolveKindMeta, saveClaireConversation, searchHistoryStore, sendClaireMessageSignal, setFlagApiBase, startVoiceCall, stopOpenReplay, streamParcelChatReply, stripAuthParams, subscribe as subscribeProfile, updatePrmPriority, updatePrmState, updatePrmTags, updateProfile, urlHasAuthParams, useAuth, useFocusTrap, useMunicipalityFlag, useReleaseNotes, useSearchHistory, useUserProfile, userManager };
+export { AIREON_HUB_ICON_URL, AIREON_HUB_MARK_URL, AIREON_HUB_URL, AIREON_LOGO_ASPECT, AIREON_LOGO_PATH, AIREON_LOGO_VIEWBOX, AddressSearch, AddressSearch as AddressSearchDefault, type AddressSearchLabels, type AddressSearchProps, type AddressSearchResult, AireonAppWordmark, AireonAppWordmark as AireonAppWordmarkDefault, type AireonAppWordmarkProps, type AireonAppWordmarkSize, AireonHubLink, AireonHubLink as AireonHubLinkDefault, type AireonHubLinkProps, AireonLogo, AireonLogo as AireonLogoDefault, type AireonLogoProps, AppNavbar, AppNavbar as AppNavbarDefault, type AppNavbarProps, type AuthContextValue, AuthProvider, type AuthProviderProps, type AuthStatus, Avatar, type AvatarGroup, type AvatarOption, type AvatarProps, BUG_REPORT_STRINGS, BugReportButton, type BugReportButtonProps, type BugReportStrings, type CallMode, type CallRole, type ChangeItem, type ChangeKind, type ChatTurn, ClaireAssistant, type ClaireAssistantProps, type ClaireContext, type ClaireConversationSummary, type ClairePOIs, type ClairePoiMapPoint, type ClaireTurn, CompareToggleButton, CompareToggleButton as CompareToggleButtonDefault, type CompareToggleButtonLabels, type CompareToggleButtonProps, type CreatePrmInput, DATA_TABLE_STRINGS_EN, DataTable, type DataTableProps, type DataTableStrings, type ErrorKind, ErrorLogBoundary, type ErrorLogBoundaryProps, type ErrorLogContext, type ErrorLogger, type ErrorLoggerOptions, type ErrorSeverity, type ExportMenuAction, ExportMenuButton, ExportMenuButton as ExportMenuButtonDefault, type ExportMenuButtonLabels, type ExportMenuButtonProps, FlagApiError, type FlagFetchOptions, type FlagImageMode, type FlagRecord, GEOPOOL_APP_URL, type GeminiCallOptions, GeminiConfigError, type Gender, KIND_META, LAUNCH_APPS, LAUNCH_DEFAULT_ZOOM, LEGACY_GEOPOOL_APP_URL, LEGACY_PROOM_APP_URL, LEGACY_TOOLBOX_APP_URL, type LaunchApp, type Locale$3 as Locale, LocaleSelector, LocaleSelector as LocaleSelectorDefault, type LocaleSelectorProps, type LocationScore, LoginModal, type LoginModalFeature, type LoginModalProps, MapToolbar, MapToolbar as MapToolbarDefault, type MapToolbarLabels, type MapToolbarProps, MapUserMenu, type MapUserMenuAction, MapUserMenu as MapUserMenuDefault, type MapUserMenuLabels, type MapUserMenuProps, MunicipalityFlag, type MunicipalityFlagProps, NavIconButton, NavIconButton as NavIconButtonDefault, type NavIconButtonProps, type OpenReplay, type OpenReplayOptions, OpenWithMenu, OpenWithMenu as OpenWithMenuDefault, type OpenWithMenuProps, OverflowNav, OverflowNav as OverflowNavDefault, type OverflowNavItem, type OverflowNavMode, type OverflowNavProps, PRM_PRIORITIES, PRM_STATES, PROOM_APP_URL, PanelActionButton, PanelActionButton as PanelActionButtonDefault, type PanelActionButtonProps, type PanelActionTone, ParcelAerialThumbnail, ParcelAerialThumbnail as ParcelAerialThumbnailDefault, type ParcelAerialThumbnailLabels, type ParcelAerialThumbnailProps, type ParcelBadgeTone, type ParcelContextInput, ParcelOpenInMenu, type ParcelOpenInMenuProps, ParcelPanelShell, ParcelPanelShell as ParcelPanelShellDefault, type ParcelPanelShellLabels, type ParcelPanelShellProps, ParcelStatusBadge, type ParcelStatusBadgeProps, Portal, type PortalProps, AuthRequiredError as PrmAuthRequiredError, type Locale$2 as PrmLocale, type PrmPriority, type PrmRecord, type PrmState, ProfileModal, type ProfileModalProps, RELEASE_NOTES_STRINGS, type RecordSearchInput, type Release, ReleaseNotesButton, type ReleaseNotesButtonProps, type ReleaseNotesController, ReleaseNotesPanel, type ReleaseNotesPanelProps, type ReleaseNotesStrings, SAVED_PARCELS_STRINGS, SCOORE_CATEGORY_COLORS, SCOORE_RADIUS_CIRCLES, SEARCH_HISTORY_API_BASE, SEARCH_HISTORY_STRINGS, SSO_ATTEMPTED_KEY, SWISSNOVO_APP_CATALOG, SWISSNOVO_SUITE_BLURB, SavedParcelsModal, type SavedParcelsModalProps, type SavedParcelsStrings, ScooreMiniMap, ScooreMiniMap as ScooreMiniMapDefault, type ScooreMiniMapLabels, type ScooreMiniMapProps, type SearchHistoryEntry, type Locale as SearchHistoryLocale, SearchHistoryModal, type SearchHistoryModalProps, type SearchHistorySnapshot, type SearchHistoryStatus, type SearchHistoryStore, type SearchHistoryStrings, SettingsMenu, SettingsMenu as SettingsMenuDefault, type SettingsMenuItem, type SettingsMenuProps, type SignalClient, type SignalClientOptions, type SignalTarget, Skeleton, SkeletonGroup, type SkeletonProps, type SkeletonProviderProps, SkeletonText, type SkeletonTextProps, type StartVoiceCallOptions, type StreamParcelChatReplyOptions, type SwissnovoProfile, TOOLBOX_APP_URL, type UseFocusTrapOptions, type UseMunicipalityFlagResult, type UseReleaseNotesOptions, type UseSearchHistoryOptions, type UseSearchHistoryResult, type UseUserProfileResult, VirtualList, type VirtualListProps, type VoiceCallCallbacks, type VoiceCallSession, type ZIndexKey, Z_INDEX, aerialThumbnailZoom, avatarOptions, avatarUrl, avatarUrlById, avatarUrlFromSeed, buildDeepLink, buildParcelContextSummary, buildSwisstopoAerialUrl, canonicalKind, clearFlagCache, clearSearchHistoryRemote, computeLocationScore, createErrorLogger, createPrmRecord, createScooreCircleGeoJSON, createSignalClient, defaultProfile, deletePrmRecord, deleteSearchEntry, emailOf, fetchClaireContext, fetchClairePOIs, fetchFlagSvgMarkup, fetchPrmByParcel, fetchPrmRecords, fetchRemoteProfile, fetchSearchHistory, firstNameOf, fullNameOf, generateParcelChatReply, getAllFlags, getAuthToken, getBugReportStrings, getExistingUser, getFlagApiBase, getFlagByBfs, getFlagsByCanton, getProfile, getReleaseNotesStrings, getSavedParcelsStrings, getSearchHistoryStrings, hydrateFromRemote, identifyOpenReplayUser, initOpenReplay, initialsOf, installErrorLogging, isSvgFlagUrl, listClaireConversations, loadClaireConversation, openInApp, pictureOf, recordSearchEntry, resolveKindMeta, saveClaireConversation, searchHistoryStore, sendClaireMessageSignal, setFlagApiBase, startVoiceCall, stopOpenReplay, streamParcelChatReply, stripAuthParams, subscribe as subscribeProfile, updatePrmPriority, updatePrmState, updatePrmTags, updateProfile, urlHasAuthParams, useAuth, useFocusTrap, useMunicipalityFlag, useReleaseNotes, useSearchHistory, useUserProfile, userManager };

@@ -321,6 +321,29 @@ export type {
   CompareToggleButtonProps,
 } from './compare/CompareToggleButton';
 
+// Suite-standard icon-only panel action button + the Export-menu control built
+// on it. The single canonical design for the buttons at the top of a parcel
+// panel (Track/save, Export, Open-in) — a 32×32 icon-only square that pairs
+// pixel-for-pixel with CompareToggleButton and the panel close button, so apps
+// stop forking bespoke `px-3 py-1.5 text-xs` text buttons that drift.
+export {
+  PanelActionButton,
+  default as PanelActionButtonDefault,
+} from './map/PanelActionButton';
+export type {
+  PanelActionButtonProps,
+  PanelActionTone,
+} from './map/PanelActionButton';
+export {
+  ExportMenuButton,
+  default as ExportMenuButtonDefault,
+} from './map/ExportMenuButton';
+export type {
+  ExportMenuButtonProps,
+  ExportMenuButtonLabels,
+  ExportMenuAction,
+} from './map/ExportMenuButton';
+
 // Suite-standard parcel-panel chrome: the fixed header (aerial · address ·
 // parcel-id chip · status badges · actions · close), the scrollable flexible
 // middle (`children`), and the fixed "Open in" footer — so every map-first
