@@ -3,10 +3,10 @@ import './chunk-6YKTLPIC.js';
 export { RES_API_BASE_URL, createResApiClient } from './chunk-J3SBZ4RV.js';
 import { Skeleton } from './chunk-756PMNQV.js';
 export { ComparablesPanel, Skeleton, SkeletonGroup, SkeletonText, getComparablesStrings, rankComparables } from './chunk-756PMNQV.js';
-import { LocalStorageCache, searchGeoAdminAddresses } from './chunk-SCW3XOJJ.js';
-export { GEOADMIN_ADDRESS_SEARCH_CACHE_MAX_BYTES, GEOADMIN_ADDRESS_SEARCH_CACHE_TTL_MINUTES, GEOADMIN_ADDRESS_SEARCH_ENDPOINT, IndexedDBCache, LocalStorageCache, normalizeAddressSearchQuery, searchGeoAdminAddresses } from './chunk-SCW3XOJJ.js';
 import { fetchGeminiWithFallback } from './chunk-JGEYZH5N.js';
 export { GEMINI_FALLBACK_CHAIN, buildGeminiModelChain, fetchGeminiWithFallback, isRetriableGeminiStatus } from './chunk-JGEYZH5N.js';
+import { LocalStorageCache, searchGeoAdminAddresses } from './chunk-SCW3XOJJ.js';
+export { GEOADMIN_ADDRESS_SEARCH_CACHE_MAX_BYTES, GEOADMIN_ADDRESS_SEARCH_CACHE_TTL_MINUTES, GEOADMIN_ADDRESS_SEARCH_ENDPOINT, IndexedDBCache, LocalStorageCache, normalizeAddressSearchQuery, searchGeoAdminAddresses } from './chunk-SCW3XOJJ.js';
 import { loadMapboxStyleForMapLibre } from './chunk-JIP6DLQI.js';
 export { loadMapboxStyleForMapLibre, normalizeMapboxResourceUrl, normalizeMapboxStyle } from './chunk-JIP6DLQI.js';
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
@@ -7338,6 +7338,147 @@ function CompareToggleButton({
   );
 }
 var CompareToggleButton_default = CompareToggleButton;
+var BASE = "inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-default shrink-0";
+function toneClasses(tone, dark) {
+  switch (tone) {
+    case "neutral":
+      return dark ? "bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] ring-1 ring-white/[0.06]" : "bg-gray-50 text-gray-600 hover:bg-gray-100 ring-1 ring-gray-200";
+    case "success":
+      return dark ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "active":
+      return dark ? "bg-red-500/20 text-red-300 ring-1 ring-red-400/30" : "bg-red-50 text-red-700 ring-1 ring-red-200";
+    case "danger":
+      return dark ? "text-red-300 hover:bg-red-500/15" : "text-red-600 hover:bg-red-50";
+    case "ghost":
+    default:
+      return dark ? "text-gray-400 hover:bg-white/[0.08] hover:text-white" : "text-gray-400 hover:bg-gray-100 hover:text-gray-700";
+  }
+}
+function PanelActionButton({
+  icon,
+  label,
+  onClick,
+  href,
+  target = "_blank",
+  disabled = false,
+  busy = false,
+  dark = false,
+  tone = "ghost",
+  ariaPressed,
+  className
+}) {
+  const cls = `${BASE} ${toneClasses(tone, dark)}${className ? ` ${className}` : ""}`;
+  const content = busy ? /* @__PURE__ */ jsx(Loader2, { className: "w-3.5 h-3.5 animate-spin", "aria-hidden": true }) : icon;
+  if (href && !disabled) {
+    return /* @__PURE__ */ jsx(
+      "a",
+      {
+        href,
+        target,
+        rel: target === "_blank" ? "noopener noreferrer" : void 0,
+        title: label,
+        "aria-label": label,
+        className: cls,
+        children: content
+      }
+    );
+  }
+  return /* @__PURE__ */ jsx(
+    "button",
+    {
+      type: "button",
+      onClick,
+      disabled: disabled || busy,
+      title: label,
+      "aria-label": label,
+      "aria-pressed": ariaPressed,
+      className: cls,
+      children: content
+    }
+  );
+}
+var PanelActionButton_default = PanelActionButton;
+function ExportMenuButton({
+  actions,
+  labels,
+  dark = false,
+  className
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  if (actions.length === 0) return null;
+  return /* @__PURE__ */ jsxs("div", { ref, className: `relative${className ? ` ${className}` : ""}`, children: [
+    /* @__PURE__ */ jsx(
+      PanelActionButton,
+      {
+        icon: /* @__PURE__ */ jsx(Download, { className: "w-3.5 h-3.5" }),
+        label: labels.menuLabel,
+        tone: "neutral",
+        dark,
+        ariaPressed: open,
+        onClick: () => setOpen((o) => !o)
+      }
+    ),
+    open && /* @__PURE__ */ jsxs(
+      "div",
+      {
+        role: "menu",
+        className: `absolute right-0 top-full mt-1.5 w-44 rounded-lg shadow-xl z-30 overflow-hidden ${dark ? "bg-[#11161f] ring-1 ring-white/[0.08]" : "bg-white ring-1 ring-gray-200"}`,
+        children: [
+          labels.sectionLabel && /* @__PURE__ */ jsx(
+            "div",
+            {
+              className: `px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${dark ? "text-slate-400" : "text-gray-500"}`,
+              children: labels.sectionLabel
+            }
+          ),
+          actions.map((action) => /* @__PURE__ */ jsxs(
+            "button",
+            {
+              type: "button",
+              role: "menuitem",
+              onClick: () => {
+                setOpen(false);
+                action.onSelect();
+              },
+              className: `w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${dark ? "text-slate-200 hover:bg-white/[0.04]" : "text-gray-700 hover:bg-gray-50"}`,
+              children: [
+                action.icon,
+                /* @__PURE__ */ jsxs("div", { className: "flex-1 min-w-0", children: [
+                  /* @__PURE__ */ jsx("div", { className: "font-medium", children: action.label }),
+                  action.hint && /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      className: `text-[11px] ${dark ? "text-slate-500" : "text-gray-400"}`,
+                      children: action.hint
+                    }
+                  )
+                ] })
+              ]
+            },
+            action.id
+          ))
+        ]
+      }
+    )
+  ] });
+}
+var ExportMenuButton_default = ExportMenuButton;
 
 // src/nav/launchApps.ts
 var LAUNCH_APPS = [
@@ -8760,4 +8901,4 @@ function VirtualList({
   );
 }
 
-export { AIREON_HUB_ICON_URL, AIREON_HUB_MARK_URL, AIREON_HUB_URL, AIREON_LOGO_ASPECT, AIREON_LOGO_PATH, AIREON_LOGO_VIEWBOX, AddressSearch, AddressSearch_default as AddressSearchDefault, AireonAppWordmark, AireonAppWordmark_default as AireonAppWordmarkDefault, AireonHubLink, AireonHubLink_default as AireonHubLinkDefault, AireonLogo, AireonLogo_default as AireonLogoDefault, AppNavbar, AppNavbar_default as AppNavbarDefault, AuthProvider, Avatar, BUG_REPORT_STRINGS, BugReportButton, ClaireAssistant_default as ClaireAssistant, CompareToggleButton, CompareToggleButton_default as CompareToggleButtonDefault, DATA_TABLE_STRINGS_EN, DataTable, ErrorLogBoundary, FlagApiError, GEOPOOL_APP_URL, GeminiConfigError, KIND_META, LAUNCH_APPS, LAUNCH_DEFAULT_ZOOM, LEGACY_GEOPOOL_APP_URL, LEGACY_PROOM_APP_URL, LEGACY_TOOLBOX_APP_URL, LocaleSelector, LocaleSelector_default as LocaleSelectorDefault, LoginModal, MapToolbar, MapToolbar_default as MapToolbarDefault, MapUserMenu, MapUserMenu_default as MapUserMenuDefault, MunicipalityFlag, NavIconButton, NavIconButton_default as NavIconButtonDefault, OpenWithMenu, OpenWithMenu_default as OpenWithMenuDefault, OverflowNav, OverflowNav_default as OverflowNavDefault, PRM_PRIORITIES, PRM_STATES, PROOM_APP_URL, ParcelAerialThumbnail, ParcelAerialThumbnail_default as ParcelAerialThumbnailDefault, ParcelOpenInMenu, ParcelPanelShell, ParcelPanelShell_default as ParcelPanelShellDefault, ParcelStatusBadge, Portal, AuthRequiredError as PrmAuthRequiredError, ProfileModal, RELEASE_NOTES_STRINGS, ReleaseNotesButton, ReleaseNotesPanel, SAVED_PARCELS_STRINGS, SCOORE_CATEGORY_COLORS, SCOORE_RADIUS_CIRCLES, SEARCH_HISTORY_API_BASE, SEARCH_HISTORY_STRINGS, SSO_ATTEMPTED_KEY, SWISSNOVO_APP_CATALOG, SWISSNOVO_SUITE_BLURB, SavedParcelsModal, ScooreMiniMap, ScooreMiniMap_default as ScooreMiniMapDefault, SearchHistoryModal, SettingsMenu, SettingsMenu_default as SettingsMenuDefault, TOOLBOX_APP_URL, VirtualList, Z_INDEX, aerialThumbnailZoom, avatarOptions, avatarUrl, avatarUrlById, avatarUrlFromSeed, buildDeepLink, buildParcelContextSummary, buildSwisstopoAerialUrl, canonicalKind, clearFlagCache, clearSearchHistoryRemote, computeLocationScore, createErrorLogger, createPrmRecord, createScooreCircleGeoJSON, createSignalClient, defaultProfile, deletePrmRecord, deleteSearchEntry, emailOf, fetchClaireContext, fetchClairePOIs, fetchFlagSvgMarkup, fetchPrmByParcel, fetchPrmRecords, fetchRemoteProfile, fetchSearchHistory, firstNameOf, fullNameOf, generateParcelChatReply, getAllFlags, getAuthToken, getBugReportStrings, getExistingUser, getFlagApiBase, getFlagByBfs, getFlagsByCanton, getProfile, getReleaseNotesStrings, getSavedParcelsStrings, getSearchHistoryStrings, hydrateFromRemote, identifyOpenReplayUser, initOpenReplay, initialsOf, installErrorLogging, isSvgFlagUrl, listClaireConversations, loadClaireConversation, openInApp, pictureOf, recordSearchEntry, resolveKindMeta, saveClaireConversation, searchHistoryStore, sendClaireMessageSignal, setFlagApiBase, startVoiceCall, stopOpenReplay, streamParcelChatReply, stripAuthParams, subscribe as subscribeProfile, updatePrmPriority, updatePrmState, updatePrmTags, updateProfile, urlHasAuthParams, useAuth, useFocusTrap, useMunicipalityFlag, useReleaseNotes, useSearchHistory, useUserProfile, userManager };
+export { AIREON_HUB_ICON_URL, AIREON_HUB_MARK_URL, AIREON_HUB_URL, AIREON_LOGO_ASPECT, AIREON_LOGO_PATH, AIREON_LOGO_VIEWBOX, AddressSearch, AddressSearch_default as AddressSearchDefault, AireonAppWordmark, AireonAppWordmark_default as AireonAppWordmarkDefault, AireonHubLink, AireonHubLink_default as AireonHubLinkDefault, AireonLogo, AireonLogo_default as AireonLogoDefault, AppNavbar, AppNavbar_default as AppNavbarDefault, AuthProvider, Avatar, BUG_REPORT_STRINGS, BugReportButton, ClaireAssistant_default as ClaireAssistant, CompareToggleButton, CompareToggleButton_default as CompareToggleButtonDefault, DATA_TABLE_STRINGS_EN, DataTable, ErrorLogBoundary, ExportMenuButton, ExportMenuButton_default as ExportMenuButtonDefault, FlagApiError, GEOPOOL_APP_URL, GeminiConfigError, KIND_META, LAUNCH_APPS, LAUNCH_DEFAULT_ZOOM, LEGACY_GEOPOOL_APP_URL, LEGACY_PROOM_APP_URL, LEGACY_TOOLBOX_APP_URL, LocaleSelector, LocaleSelector_default as LocaleSelectorDefault, LoginModal, MapToolbar, MapToolbar_default as MapToolbarDefault, MapUserMenu, MapUserMenu_default as MapUserMenuDefault, MunicipalityFlag, NavIconButton, NavIconButton_default as NavIconButtonDefault, OpenWithMenu, OpenWithMenu_default as OpenWithMenuDefault, OverflowNav, OverflowNav_default as OverflowNavDefault, PRM_PRIORITIES, PRM_STATES, PROOM_APP_URL, PanelActionButton, PanelActionButton_default as PanelActionButtonDefault, ParcelAerialThumbnail, ParcelAerialThumbnail_default as ParcelAerialThumbnailDefault, ParcelOpenInMenu, ParcelPanelShell, ParcelPanelShell_default as ParcelPanelShellDefault, ParcelStatusBadge, Portal, AuthRequiredError as PrmAuthRequiredError, ProfileModal, RELEASE_NOTES_STRINGS, ReleaseNotesButton, ReleaseNotesPanel, SAVED_PARCELS_STRINGS, SCOORE_CATEGORY_COLORS, SCOORE_RADIUS_CIRCLES, SEARCH_HISTORY_API_BASE, SEARCH_HISTORY_STRINGS, SSO_ATTEMPTED_KEY, SWISSNOVO_APP_CATALOG, SWISSNOVO_SUITE_BLURB, SavedParcelsModal, ScooreMiniMap, ScooreMiniMap_default as ScooreMiniMapDefault, SearchHistoryModal, SettingsMenu, SettingsMenu_default as SettingsMenuDefault, TOOLBOX_APP_URL, VirtualList, Z_INDEX, aerialThumbnailZoom, avatarOptions, avatarUrl, avatarUrlById, avatarUrlFromSeed, buildDeepLink, buildParcelContextSummary, buildSwisstopoAerialUrl, canonicalKind, clearFlagCache, clearSearchHistoryRemote, computeLocationScore, createErrorLogger, createPrmRecord, createScooreCircleGeoJSON, createSignalClient, defaultProfile, deletePrmRecord, deleteSearchEntry, emailOf, fetchClaireContext, fetchClairePOIs, fetchFlagSvgMarkup, fetchPrmByParcel, fetchPrmRecords, fetchRemoteProfile, fetchSearchHistory, firstNameOf, fullNameOf, generateParcelChatReply, getAllFlags, getAuthToken, getBugReportStrings, getExistingUser, getFlagApiBase, getFlagByBfs, getFlagsByCanton, getProfile, getReleaseNotesStrings, getSavedParcelsStrings, getSearchHistoryStrings, hydrateFromRemote, identifyOpenReplayUser, initOpenReplay, initialsOf, installErrorLogging, isSvgFlagUrl, listClaireConversations, loadClaireConversation, openInApp, pictureOf, recordSearchEntry, resolveKindMeta, saveClaireConversation, searchHistoryStore, sendClaireMessageSignal, setFlagApiBase, startVoiceCall, stopOpenReplay, streamParcelChatReply, stripAuthParams, subscribe as subscribeProfile, updatePrmPriority, updatePrmState, updatePrmTags, updateProfile, urlHasAuthParams, useAuth, useFocusTrap, useMunicipalityFlag, useReleaseNotes, useSearchHistory, useUserProfile, userManager };
